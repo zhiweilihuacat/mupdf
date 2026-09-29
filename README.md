@@ -31,4 +31,4 @@
 
 ```bash
 
-git clone https://github.com/a349058231/mupdf.git
+git https://github.com/zhiweilihuacat/mupdf.git

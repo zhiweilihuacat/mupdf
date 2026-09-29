@@ -1,0 +1,83 @@
+name: Build Cross-Platform Executables
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "版本号（如 v1.0.0）"
+        required: true
+        default: "v1.0.0"
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+    contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller
+          pip install -r requirements.txt
+
+      - name: Build executable
+        run: |
+          pyinstaller --onefile --windowed --clean --noconfirm pdf2img.py
+
+      - name: Rename output
+        shell: bash
+        run: |
+          if [ "$RUNNER_OS" == "Windows" ]; then
+            mv dist/pdf2img.exe dist/pdf2img-windows.exe
+          elif [ "$RUNNER_OS" == "Linux" ]; then
+            mv dist/pdf2img dist/pdf2img-linux
+          elif [ "$RUNNER_OS" == "macOS" ]; then
+            if [ -d "dist/pdf2img.app" ]; then
+              cd dist && zip -r pdf2img-macos.zip pdf2img.app && cd ..
+            elif [ -f "dist/pdf2img" ]; then
+              mv dist/pdf2img dist/pdf2img-macos
+            fi
+          fi
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pdf2img-${{ matrix.os }}
+          path: dist/pdf2img-*
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+
+      - name: Make files executable
+        run: chmod +x pdf2img-* || true
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.version || github.ref_name }}
+          files: |
+            pdf2img-windows.exe
+            pdf2img-linux
+            pdf2img-macos.zip
